@@ -1,70 +1,60 @@
-### **Instrucciones**
+### **Fine-Tuning de un Modelo Pre-entrenado**
 
-#### **Efectos de Label Smoothing en la Confianza y Generalización (Evaluación)**
+#### **Descripción**
+En esta evaluación, aplicarás las técnicas de **Transfer Learning** y **Fine-Tuning** para resolver un problema de clasificación de imágenes utilizando el dataset CIFAR-10. Utilizarás un modelo de vanguardia (como EfficientNetV2B0) pre-entrenado en ImageNet como base. El proceso se dividirá en dos fases: primero, implementarás la extracción de características para establecer una línea base de rendimiento; segundo, aplicarás el fine-tuning para ajustar el modelo y mejorar los resultados.
 
-##### **Descripción**
-En esta evaluación, investigarás el efecto de **Label Smoothing**, una técnica de regularización que previene que el modelo se vuelva demasiado confiado en sus predicciones. Para ello, entrenarás dos modelos CNN idénticos en el dataset CIFAR-10: un modelo base con una función de pérdida estándar y un segundo modelo que utiliza la misma pérdida pero con el parámetro de `label_smoothing` activado. El análisis se centrará en comparar no solo la precisión, sino también la distribución de la confianza de las predicciones.
+#### **Objetivo**
+El objetivo principal es demostrar la correcta implementación del flujo de trabajo de fine-tuning en dos fases. Deberás cargar un modelo pre-entrenado, entrenar un clasificador personalizado sobre la base congelada, y luego descongelar y ajustar finamente las capas superiores de la base con una tasa de aprendizaje baja para maximizar la precisión. Finalmente, deberás comparar y analizar los resultados de ambas fases.
 
-##### **Objetivo**
-El objetivo principal es demostrar empíricamente los efectos de Label Smoothing. Deberás:
-* Implementar y entrenar un modelo CNN de clasificación de imágenes como línea base.
-* Implementar y entrenar una segunda instancia del mismo modelo activando Label Smoothing en la función de pérdida.
-* Comparar las curvas de aprendizaje para evaluar el impacto de la técnica en la generalización del modelo.
-* Realizar un análisis cuantitativo y visual de la confianza de las predicciones para demostrar cómo Label Smoothing reduce la sobreconfianza.
-
-##### **Instrucciones**
+#### **Instrucciones**
 
 1.  **Carga y Preparación de Datos:**
-    * Carga el dataset **CIFAR-10** desde `tensorflow.keras.datasets`.
-    * Normaliza las imágenes al rango [0, 1] y convierte las etiquetas a formato categórico (one-hot encoding).
+    * Carga el dataset **CIFAR-10** directamente desde `tensorflow.keras.datasets`.
+    * Asegúrate de que los datos tengan el tipo de dato correcto para el modelo pre-entrenado que utilizarás. No es necesario normalizar los píxeles a [0, 1] si usas un modelo como EfficientNetV2, ya que su preprocesamiento interno se encarga de ello.
+    * Convierte las etiquetas a formato categórico (one-hot encoding).
 
-2.  **Construcción y Entrenamiento del Modelo Base:**
-    * Define y construye una arquitectura CNN. Puedes usar la proporcionada en el laboratorio de solución o una similar con al menos dos bloques convolucionales y una cabeza clasificadora con `Dropout` y `BatchNormalization`.
-    * Compila este modelo utilizando el optimizador `Adam` y la función de pérdida estándar `CategoricalCrossentropy`.
-    * Entrena el modelo durante **25 épocas**, guardando el historial de entrenamiento.
+2.  **Fase 1: Implementación de Extracción de Características (Línea Base):**
+    * Carga la base de un modelo pre-entrenado (se recomienda **EfficientNetV2B0**), con los pesos de `imagenet` y sin la capa superior (`include_top=False`). Adapta el `input_shape` a las imágenes de CIFAR-10 (32, 32, 3).
+    * **Congela** la base convolucional para que sus pesos no se actualicen durante esta primera fase (`base_model.trainable = False`).
+    * Añade una nueva "cabeza" clasificadora sobre la base congelada. Esta debe consistir en una capa `GlobalAveragePooling2D`, una capa `Dropout` para regularización y una capa `Dense` final con activación `softmax` para las 10 clases de CIFAR-10.
+    * Compila el modelo utilizando el optimizador `Adam` y la función de pérdida `CategoricalCrossentropy`.
+    * Entrena el modelo durante **15 épocas**. Guarda el historial de entrenamiento.
 
-3.  **Construcción y Entrenamiento del Modelo con Label Smoothing:**
-    * Construye una **instancia idéntica** de la misma arquitectura de red neuronal para asegurar una comparación justa.
-    * Compila este segundo modelo con los mismos hiperparámetros que el modelo base, pero con una diferencia clave: instancia la función de pérdida con el parámetro de suavizado, así: `loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1)`.
-    * Entrena este modelo con los mismos datos y durante el mismo número de épocas.
+3.  **Fase 2: Implementación del Fine-Tuning:**
+    * Toma el modelo entrenado en la fase anterior.
+    * **Descongela** la base del modelo (`base_model.trainable = True`). A continuación, congela de nuevo todas las capas excepto las **últimas 40**. Esto asegurará que solo se ajusten las capas más especializadas.
+    * **Re-compila** el modelo. Este es un paso crítico: debes usar un optimizador `Adam` con una **tasa de aprendizaje muy baja** (ej. `1e-5`).
+    * Continúa el entrenamiento del modelo por **10 épocas adicionales**. Asegúrate de usar el argumento `initial_epoch` en el método `.fit()` para que el historial y las gráficas continúen desde donde terminó la fase anterior.
 
-4.  **Comparación del Rendimiento (Generalización):**
-    * Crea una única gráfica que muestre las curvas de **precisión en validación (`val_accuracy`)** de ambos modelos (base y con label smoothing) a lo largo de las épocas.
-    * Etiqueta claramente cada curva para una fácil comparación.
+4.  **Evaluación y Análisis Comparativo:**
+    * Evalúa el rendimiento del modelo en el conjunto de prueba **después de la Fase 1** y anota la precisión. Esta será tu línea base.
+    * Evalúa el rendimiento final del modelo en el conjunto de prueba **después de la Fase 2** (fine-tuning).
+    * Presenta una comparación clara de la precisión final entre ambas fases y calcula la mejora obtenida.
+    * Visualiza las curvas de aprendizaje (precisión y pérdida en validación) para todo el proceso (las 25 épocas totales). Utiliza una línea vertical para marcar claramente el punto donde comenzó el fine-tuning.
 
-5.  **Análisis de la Confianza de las Predicciones:**
-    * Obtén las predicciones (probabilidades softmax) para el conjunto de prueba (`x_test`) de ambos modelos.
-    * Para cada modelo, identifica las predicciones que fueron **correctas**.
-    * De esas predicciones correctas, extrae la probabilidad máxima de cada una (este es el "nivel de confianza" del modelo para esa predicción).
-    * Crea un **histograma** que compare la distribución de estos niveles de confianza para el modelo base y el modelo con label smoothing.
-
-6.  **Discusión de Resultados:**
-    * Basándote en tus gráficas y resultados, responde a las siguientes preguntas:
-        * ¿Cómo afectó Label Smoothing a la precisión final en validación?
-        * Describe la diferencia principal que observas en los histogramas de confianza. ¿Qué le hizo Label Smoothing a las predicciones del modelo?
-        * Explica por qué un modelo "menos confiado" podría ser más deseable en aplicaciones críticas del mundo real.
-
-##### **Sugerencias**
-
-* La clave de este laboratorio está en la compilación: la única diferencia entre los dos modelos debe ser la inicialización de la función de pérdida.
-* Para el análisis de confianza, las funciones `np.argmax()` para encontrar la clase predicha y `np.max()` para encontrar la probabilidad máxima de la predicción serán muy útiles.
-* Al graficar el histograma de confianzas, considera usar `plt.xlim(0.8, 1.0)` para hacer zoom en la zona de alta confianza, donde las diferencias son más notorias.
+5.  **Discusión de Resultados:**
+    * Analiza las gráficas y los resultados finales. ¿El fine-tuning mejoró el rendimiento del modelo?
+    * En un breve párrafo, explica por qué fue crucial reducir la tasa de aprendizaje para la fase de fine-tuning y qué podría haber sucedido si no lo hubieras hecho.
+    * Discute en qué tipo de escenario (considerando el tamaño y la naturaleza del dataset) el esfuerzo extra de implementar fine-tuning es más beneficioso.
 
 ---
-## Ejercicio Práctico: Efectos de Label Smoothing en la Confianza y Generalización
 
-### **Objetivo del Ejercicio**
-1.  Entrenar dos modelos CNN idénticos en el dataset CIFAR-10.
-2.  El primer modelo usará la función de pérdida de entropía cruzada categórica estándar.
-3.  El segundo modelo usará la misma función de pérdida pero con **Label Smoothing** activado.
-4.  Comparar el rendimiento de ambos modelos (generalización) y, más importante, la **confianza** de sus predicciones.
+---
+## Laboratorio Práctico: Del Transfer Learning al Fine-Tuning Fino
+
+### **Objetivo del Laboratorio**
+* Tomar el modelo entrenado mediante **extracción de características** del laboratorio anterior.
+* Aplicar el proceso de **fine-tuning** para re-entrenar las capas superiores del modelo base.
+* Comparar la precisión final antes y después del fine-tuning para evaluar si la técnica mejora el rendimiento.
+* Entender el flujo de trabajo completo de dos fases: extracción y luego ajuste fino.
 
 ### **Entorno**
-Este laboratorio utiliza **Python**, **TensorFlow** y **Keras**.
+Este laboratorio utiliza **Python**, **TensorFlow** y **Keras**. Se asume que se parte del código y los resultados del laboratorio anterior.
 
 ---
-### **Parte 0: Configuración y Preparación del Dataset**
-Comenzamos con la configuración habitual, importando librerías y preparando el dataset CIFAR-10.
+### **Parte 1: Recapitulación - Nuestra Línea Base de Extracción de Características**
+
+Para que este laboratorio sea autocontenido, comenzaremos por ejecutar rápidamente los pasos del laboratorio anterior. Nuestro objetivo es obtener un modelo entrenado únicamente en su "cabeza" clasificadora, que servirá como nuestra línea base para la comparación.
 
 ```python
 import tensorflow as tf
@@ -73,153 +63,140 @@ from tensorflow.keras import layers
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Cargar el dataset CIFAR-10
+# --- 1. Carga y Preparación de Datos ---
 (x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
-
-# Normalizar los valores de los píxeles al rango [0, 1]
-x_train = x_train.astype("float32") / 255.0
-x_test = x_test.astype("float32") / 255.0
-
-# Convertir las etiquetas a formato one-hot encoding
+x_train = x_train.astype("float32")
+x_test = x_test.astype("float32")
 num_classes = 10
 y_train_cat = keras.utils.to_categorical(y_train, num_classes)
 y_test_cat = keras.utils.to_categorical(y_test, num_classes)
 
-print(f"Forma de x_train: {x_train.shape}")
-print(f"Forma de y_train (categórica): {y_train_cat.shape}")
+# --- 2. Cargar y Congelar la Base ---
+INPUT_SHAPE = (32, 32, 3)
+base_model = keras.applications.EfficientNetV2B0(
+    include_top=False,
+    weights='imagenet',
+    input_shape=INPUT_SHAPE
+)
+base_model.trainable = False # Congelamos la base
+
+# --- 3. Construir el Modelo Completo ---
+model = keras.Sequential([
+    base_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dropout(0.3),
+    layers.Dense(num_classes, activation="softmax")
+], name="finetuning_lab_model")
+
+# --- 4. Compilar y Entrenar (Fase de Extracción) ---
+model.compile(
+    optimizer=keras.optimizers.Adam(),
+    loss=keras.losses.CategoricalCrossentropy(),
+    metrics=[keras.metrics.CategoricalAccuracy()]
+)
+
+print("--- FASE 1: Entrenando con Extracción de Características ---")
+initial_epochs = 15
+history = model.fit(
+    x_train,
+    y_train_cat,
+    epochs=initial_epochs,
+    validation_data=(x_test, y_test_cat)
+)
+
+# Guardar el rendimiento de nuestra línea base
+loss_baseline, accuracy_baseline = model.evaluate(x_test, y_test_cat, verbose=0)
+print(f"\nPrecisión de Línea Base (Extracción de Características): {accuracy_baseline * 100:.2f}%")
 ```
 
 ---
-### **Parte 1: Construcción y Entrenamiento del Modelo Base (Sin Label Smoothing)**
-Primero, definimos nuestra arquitectura CNN. Será la misma para ambos experimentos para asegurar una comparación justa. Luego, la compilaremos con la función de pérdida estándar.
+### **Parte 2: El Proceso de Fine-Tuning**
+
+Ahora que tenemos una cabeza clasificadora estable, podemos proceder con el ajuste fino de las capas superiores del modelo base.
+
+#### **Paso 2a: Descongelar las Capas Superiores**
+Vamos a "descongelar" la base para que sus pesos puedan ser actualizados. Sin embargo, no queremos re-entrenar toda la red, solo las capas más especializadas (las últimas).
 
 ```python
-def build_model(input_shape, num_classes):
-    """Construye una CNN simple pero efectiva."""
-    model = keras.Sequential([
-        layers.Conv2D(32, (3,3), padding='same', activation='relu', input_shape=input_shape),
-        layers.BatchNormalization(),
-        layers.Conv2D(32, (3,3), padding='same', activation='relu'),
-        layers.BatchNormalization(),
-        layers.MaxPooling2D(pool_size=(2,2)),
-        layers.Dropout(0.3),
+# Descongelamos la base
+base_model.trainable = True
 
-        layers.Conv2D(64, (3,3), padding='same', activation='relu'),
-        layers.BatchNormalization(),
-        layers.Conv2D(64, (3,3), padding='same', activation='relu'),
-        layers.BatchNormalization(),
-        layers.MaxPooling2D(pool_size=(2,2)),
-        layers.Dropout(0.5),
+# Veamos cuántas capas tiene la base
+print(f"La base del modelo tiene {len(base_model.layers)} capas.")
 
-        layers.Flatten(),
-        layers.Dense(128, activation='relu'),
-        layers.BatchNormalization(),
-        layers.Dropout(0.5),
-        layers.Dense(num_classes, activation='softmax'),
-    ])
-    return model
+# Decidimos congelar todas las capas excepto las últimas 40
+fine_tune_at = -40 # Descongelar las últimas 40 capas
 
-# --- Entrenamiento del Modelo Base ---
-print("--- Entrenando Modelo Base (Sin Label Smoothing) ---")
+for layer in base_model.layers[:fine_tune_at]:
+    layer.trainable = False
 
-# Construir el modelo
-base_model = build_model(x_train.shape[1:], num_classes)
-
-# Compilar con la pérdida estándar
-base_model.compile(
-    optimizer='adam',
-    loss=tf.keras.losses.CategoricalCrossentropy(), # Sin label_smoothing
-    metrics=['accuracy']
-)
-
-# Entrenar el modelo
-batch_size = 64
-epochs = 25 # Un número razonable de épocas para ver los efectos
-
-history_base = base_model.fit(
-    x_train, y_train_cat,
-    batch_size=batch_size,
-    epochs=epochs,
-    validation_data=(x_test, y_test_cat),
-    verbose=1 # Usar verbose=1 para ver el progreso
-)
+print(f"Fine-tuning se aplicará sobre las últimas {-fine_tune_at} capas del modelo base.")
 ```
----
 
-### **Parte 2: Modelo con Label Smoothing**
-Ahora, creamos y entrenamos un segundo modelo con la misma arquitectura, pero esta vez, al compilar, activamos `label_smoothing`. Un valor común para el factor de suavizado ($\alpha$) es 0.1.
+#### **Paso 2b: Re-compilar el Modelo con una Tasa de Aprendizaje Baja**
+Este es el paso **más crítico**. Para no destruir el conocimiento pre-entrenado con actualizaciones de gradiente muy grandes, debemos usar una tasa de aprendizaje (learning rate) muy pequeña.
 
 ```python
-# --- Entrenamiento del Modelo con Label Smoothing ---
-print("\n--- Entrenando Modelo con Label Smoothing ---")
-
-# Construir una instancia idéntica del modelo
-ls_model = build_model(x_train.shape[1:], num_classes)
-
-# Compilar con la pérdida y label_smoothing=0.1
-ls_model.compile(
-    optimizer='adam',
-    loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
-    metrics=['accuracy']
+# Re-compilar el modelo con un optimizador y una tasa de aprendizaje muy baja
+model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=1e-5), # ¡LR muy bajo!
+    loss=keras.losses.CategoricalCrossentropy(),
+    metrics=[keras.metrics.CategoricalAccuracy()]
 )
 
-# Entrenar el modelo
-history_ls = ls_model.fit(
-    x_train, y_train_cat,
-    batch_size=batch_size,
-    epochs=epochs,
-    validation_data=(x_test, y_test_cat),
-    verbose=1
+model.summary()
+```
+**Observación:** Al ver el nuevo resumen, notarás que el número de "Trainable params" ha aumentado, pero sigue siendo mucho menor que el total de parámetros.
+
+---
+### **Parte 3: Continuar el Entrenamiento (Fase de Fine-Tuning)**
+Ahora continuamos el entrenamiento desde donde lo dejamos. `initial_epoch` le dice a Keras que estamos continuando un proceso de entrenamiento anterior, lo cual es importante para las gráficas de historial.
+
+```python
+print("\n--- FASE 2: Continuando el Entrenamiento con Fine-Tuning ---")
+
+fine_tune_epochs = 10 # Entrenar por 10 épocas adicionales
+total_epochs = initial_epochs + fine_tune_epochs
+
+# Continuar el entrenamiento
+history_fine_tune = model.fit(
+    x_train,
+    y_train_cat,
+    epochs=total_epochs,
+    initial_epoch=history.epoch[-1] + 1, # Empezar desde la última época de la fase anterior
+    validation_data=(x_test, y_test_cat)
 )
 ```
 
 ---
-### **Parte 3: Comparación de la Generalización (Rendimiento)**
-Comparemos las curvas de precisión en el conjunto de validación para ver si Label Smoothing ayudó a la generalización.
+### **Parte 4: Comparación Final y Análisis**
+Comparemos el rendimiento antes y después del fine-tuning.
 
 ```python
-plt.figure(figsize=(10, 6))
-plt.plot(history_base.history['val_accuracy'], label='Base Model (Validation)', color='blue')
-plt.plot(history_ls.history['val_accuracy'], label='Label Smoothing Model (Validation)', color='red', linestyle='--')
-plt.title('Comparación de Precisión en Validación')
+# Evaluar el rendimiento final después del fine-tuning
+loss_finetune, accuracy_finetune = model.evaluate(x_test, y_test_cat, verbose=0)
+print(f"\nPrecisión después de Fine-Tuning: {accuracy_finetune * 100:.2f}%")
+print(f"Mejora con Fine-Tuning: {(accuracy_finetune - accuracy_baseline) * 100:.2f}%")
+
+# Graficar los resultados combinados
+# Unimos los historiales de ambas fases de entrenamiento
+acc = history.history['val_categorical_accuracy'] + history_fine_tune.history['val_categorical_accuracy']
+loss = history.history['val_loss'] + history_fine_tune.history['val_loss']
+
+plt.figure(figsize=(8, 8))
+plt.subplot(2, 1, 1)
+plt.plot(acc, label='Precisión en Validación')
+plt.plot([initial_epochs-1, initial_epochs-1], plt.ylim(), label='Inicio del Fine-Tuning', linestyle='--')
+plt.legend(loc='lower right')
+plt.title('Precisión en Validación a lo largo del Entrenamiento Completo')
+plt.grid(True)
+
+plt.subplot(2, 1, 2)
+plt.plot(loss, label='Pérdida en Validación')
+plt.plot([initial_epochs-1, initial_epochs-1], plt.ylim(), label='Inicio del Fine-Tuning', linestyle='--')
+plt.legend(loc='upper right')
+plt.title('Pérdida en Validación a lo largo del Entrenamiento Completo')
 plt.xlabel('Épocas')
-plt.ylabel('Precisión')
-plt.legend()
 plt.grid(True)
 plt.show()
-```
-
----
-### **Parte 4: Comparación de la Confianza de las Predicciones**
-Esta es la parte más reveladora. Un modelo sobreconfiado hará predicciones correctas con una probabilidad muy cercana a 1.0. Label smoothing busca "calmar" esta confianza.
-
-Analizaremos las probabilidades de las predicciones **correctas** en el conjunto de prueba para ambos modelos.
-
-```python
-# Obtener predicciones para el conjunto de prueba
-preds_base = base_model.predict(x_test)
-preds_ls = ls_model.predict(x_test)
-
-# Identificar las predicciones correctas para cada modelo
-correct_preds_base_mask = np.argmax(preds_base, axis=1) == y_test.flatten()
-correct_preds_ls_mask = np.argmax(preds_ls, axis=1) == y_test.flatten()
-
-# Obtener la confianza (probabilidad máxima) de las predicciones correctas
-confidence_base = np.max(preds_base[correct_preds_base_mask], axis=1)
-confidence_ls = np.max(preds_ls[correct_preds_ls_mask], axis=1)
-
-# Graficar un histograma de las confianzas
-plt.figure(figsize=(12, 6))
-plt.hist(confidence_base, bins=50, density=True, alpha=0.7, label='Modelo Base')
-plt.hist(confidence_ls, bins=50, density=True, alpha=0.7, label='Modelo con Label Smoothing')
-plt.title('Distribución de la Confianza en Predicciones Correctas')
-plt.xlabel('Confianza (Probabilidad de la clase predicha)')
-plt.ylabel('Densidad')
-plt.xlim(0.8, 1.0) # Enfocamos el gráfico en la zona de alta confianza
-plt.legend()
-plt.grid(True)
-plt.show()
-
-print(f"Confianza promedio (Base Model): {np.mean(confidence_base):.4f}")
-print(f"Confianza promedio (Label Smoothing Model): {np.mean(confidence_ls):.4f}")
 ```
